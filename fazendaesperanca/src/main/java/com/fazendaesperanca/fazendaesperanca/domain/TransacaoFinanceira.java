@@ -3,6 +3,7 @@ package com.fazendaesperanca.fazendaesperanca.domain;
 import com.fazendaesperanca.fazendaesperanca.domain.enums.FormaPagamento;
 import com.fazendaesperanca.fazendaesperanca.domain.enums.StatusTransacao;
 import com.fazendaesperanca.fazendaesperanca.domain.enums.TipoTransacao;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -38,6 +39,7 @@ public class TransacaoFinanceira {
     private String origemDocumento;
 
     @ManyToOne(fetch = FetchType.LAZY)
+    @JsonIgnore
     @JoinColumn(name = "acolhida_id")
     private Acolhida acolhida;
 
@@ -61,6 +63,7 @@ public class TransacaoFinanceira {
     private String arquivoAssinadoPath;
 
     @ManyToOne(optional = false, fetch = FetchType.LAZY)
+    @JsonIgnore
     @JoinColumn(name = "responsavel_id")
     private User responsavel;
 

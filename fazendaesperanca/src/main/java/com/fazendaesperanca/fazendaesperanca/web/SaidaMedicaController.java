@@ -31,6 +31,7 @@ public class SaidaMedicaController {
 
     @PreAuthorize("hasAnyRole('ADMIN','RESPONSAVEL','COLABORADOR')")
     @PostMapping
+    @Transactional
     @com.fazendaesperanca.fazendaesperanca.audit.AuditableAction(value = com.fazendaesperanca.fazendaesperanca.domain.enums.AuditAction.CREATE, entity = "SaidaMedica")
     public SaidaMedicaDTO create(@Valid @RequestBody CriarSaidaRequest req, @AuthenticationPrincipal UserDetails user) {
         Acolhida acolhida = acolhidaRepository.findById(req.getAcolhidaId()).orElseThrow();
@@ -76,6 +77,7 @@ public class SaidaMedicaController {
 
     @PreAuthorize("hasAnyRole('ADMIN','RESPONSAVEL','COLABORADOR')")
     @PutMapping("/{id}")
+    @Transactional
     @com.fazendaesperanca.fazendaesperanca.audit.AuditableAction(value = com.fazendaesperanca.fazendaesperanca.domain.enums.AuditAction.UPDATE, entity = "SaidaMedica", idParam = "id")
     public SaidaMedicaDTO update(@PathVariable Long id, @Valid @RequestBody EditarSaidaRequest req) {
         SaidaMedica s = repository.findById(id).orElseThrow();
@@ -89,6 +91,7 @@ public class SaidaMedicaController {
 
     @PreAuthorize("hasAnyRole('ADMIN','RESPONSAVEL','COLABORADOR')")
     @PutMapping("/{id}/retorno")
+    @Transactional
     @com.fazendaesperanca.fazendaesperanca.audit.AuditableAction(value = com.fazendaesperanca.fazendaesperanca.domain.enums.AuditAction.UPDATE, entity = "SaidaMedica", idParam = "id")
     public SaidaMedicaDTO registrarRetorno(@PathVariable Long id, @RequestBody RegistrarRetornoRequest req) {
         SaidaMedica s = repository.findById(id).orElseThrow();

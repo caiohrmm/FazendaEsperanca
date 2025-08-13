@@ -1,10 +1,8 @@
 import { Navigate, Outlet, Route, Routes } from 'react-router-dom'
-import { useEffect } from 'react'
 import { AuthProvider, useAuth } from './auth/AuthContext'
 import { ToastProvider } from './system/toast'
 import GlobalLoading from './components/GlobalLoading'
 import LoginPage from './auth/LoginPage'
-import RegisterPage from './auth/RegisterPage'
 import DashboardPage from './dashboard/DashboardPage'
 import AcolhidasPage from './modules/acolhidas/AcolhidasPage'
 import SaidasPage from './modules/saidas/SaidasPage'
@@ -33,7 +31,6 @@ export default function App() {
         <GlobalLoading />
         <Routes>
           <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
           <Route element={<PrivateLayout />}> 
             <Route path="/" element={<DashboardPage />} />
             <Route path="/acolhidas" element={<AcolhidasPage />} />

@@ -5,7 +5,6 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from '
 type AuthContextType = {
   token: string | null
   login: (email: string, senha: string) => Promise<void>
-  register: (nome: string, email: string, senha: string, role?: string) => Promise<void>
   logout: () => void
 }
 
@@ -13,6 +12,8 @@ const AuthContext = createContext<AuthContextType>({} as any)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(() => localStorage.getItem('accessToken'))
+  const idleTimeoutMinutes = Number((import.meta as any).env?.VITE_IDLE_TIMEOUT_MINUTES ?? 30)
+  const idleTimeoutMs = isFinite(idleTimeoutMinutes) && idleTimeoutMinutes > 0 ? idleTimeoutMinutes * 60 * 1000 : 30 * 60 * 1000
 
   // Configuração síncrona para evitar 403 em refresh antes dos interceptors
   const baseURL = (import.meta as any).env?.VITE_API_BASE_URL ?? 'http://localhost:8080/api'
@@ -21,7 +22,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   else delete axios.defaults.headers.common['Authorization']
 
   useEffect(() => {
-    const baseURL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080/api'
+    const baseURL = (import.meta as any).env?.VITE_API_BASE_URL ?? 'http://localhost:8080/api'
     axios.defaults.baseURL = baseURL
     let active = 0
     const reqId = axios.interceptors.request.use((config) => {
@@ -82,6 +83,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             isRefreshing = false
           }
         }
+        // API offline ou erro de servidor: desloga e volta para login
+        const networkDown = !error?.response
+        const serverDown = typeof status === 'number' && status >= 500
+        if (!isAuthEndpoint && (networkDown || serverDown)) {
+          logout()
+        }
         return Promise.reject(error)
       }
     )
@@ -97,19 +104,69 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setToken(data.accessToken)
     localStorage.setItem('accessToken', data.accessToken)
     localStorage.setItem('refreshToken', data.refreshToken)
-  }
-
-  const register = async (nome: string, email: string, senha: string, role = 'VISUALIZADOR') => {
-    await axios.post('/auth/register', { nome, email, senha, role })
+    localStorage.setItem('lastActivityAt', String(Date.now()))
   }
 
   const logout = () => {
     setToken(null)
     localStorage.removeItem('accessToken')
     localStorage.removeItem('refreshToken')
+    localStorage.removeItem('lastActivityAt')
   }
 
-  const value = useMemo(() => ({ token, login, register, logout }), [token])
+  // Idle logout + cross-tab sync
+  useEffect(() => {
+    let idleTimer: number | null = null
+    const activityEvents = ['mousemove','keydown','click','scroll','touchstart','visibilitychange'] as const
+
+    const markActivity = () => {
+      if (!token) return
+      localStorage.setItem('lastActivityAt', String(Date.now()))
+      schedule()
+    }
+
+    const checkIdle = () => {
+      if (!token) return
+      const last = Number(localStorage.getItem('lastActivityAt') || 0)
+      const since = Date.now() - last
+      if (since >= idleTimeoutMs) {
+        logout()
+      } else {
+        schedule(idleTimeoutMs - since)
+      }
+    }
+
+    const schedule = (timeout = idleTimeoutMs) => {
+      if (idleTimer) window.clearTimeout(idleTimer)
+      idleTimer = window.setTimeout(checkIdle, timeout)
+    }
+
+    // start/stop by token
+    if (token) {
+      if (!localStorage.getItem('lastActivityAt')) localStorage.setItem('lastActivityAt', String(Date.now()))
+      schedule()
+      activityEvents.forEach(evt => window.addEventListener(evt, markActivity, { passive: true }))
+    }
+
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'accessToken') {
+        // cross-tab login/logout
+        setToken(e.newValue)
+      }
+      if (e.key === 'lastActivityAt' && token) {
+        schedule()
+      }
+    }
+    window.addEventListener('storage', onStorage)
+
+    return () => {
+      if (idleTimer) window.clearTimeout(idleTimer)
+      activityEvents.forEach(evt => window.removeEventListener(evt, markActivity))
+      window.removeEventListener('storage', onStorage)
+    }
+  }, [token, idleTimeoutMs])
+
+  const value = useMemo(() => ({ token, login, logout }), [token])
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 

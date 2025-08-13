@@ -161,7 +161,7 @@ function SaidasPage(){
 
   // Funções para saída em grupo
   const openGroupCreate = ()=>{
-    setGroupForm({ motivo:'CONSULTA', destino:'', profissional:'', data:null, hora:'', meioTransporte:'', observacoes:'', responsavel:'ALCILEIA_FIGUEREDO' })
+    setGroupForm({ motivo:'CONSULTA', destino:'', profissional:'', data:null, hora:'', meioTransporte:'', observacoes:'', responsavel:'ALCILEIA_FIGUEREDO', retornoData: null, retornoHora: '' })
     setGroupSelected([])
     setGroupOpen(true)
   }
@@ -235,7 +235,7 @@ function SaidasPage(){
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Saídas Médicas</h1>
-        <div className="flex gap-2">
+        <div className="hidden md:flex gap-2">
           <Button onClick={openGroupCreate}>Saída em grupo</Button>
           <Button onClick={openCreate}>Nova saída</Button>
           <Button onClick={load} variant="secondary">Atualizar</Button>
@@ -248,10 +248,21 @@ function SaidasPage(){
             <div className="md:col-span-2">
               <label className="block">
                 <span className="block mb-1">Acolhida</span>
-                <div className="flex gap-2">
+                <div className="hidden md:flex gap-2">
                   <input className="flex-1 border rounded-lg p-3 text-lg bg-gray-50" value={filtroAcolhidaNome || (filtroAcolhidaId?`ID ${filtroAcolhidaId}`:'')} readOnly placeholder="Selecione a acolhida (opcional)" />
                   {filtroAcolhidaId && (<Button type="button" variant="secondary" onClick={()=>{ setFiltroAcolhidaId(null); setFiltroAcolhidaNome('') }}>Limpar</Button>)}
                   <Button type="button" onClick={()=>{ setFilterPickerOpen(true); loadFilterPicker(); }}>Selecionar</Button>
+                </div>
+                <div className="md:hidden">
+                  <input className="w-full border rounded-lg p-4 text-xl bg-gray-50" value={filtroAcolhidaNome || (filtroAcolhidaId?`ID ${filtroAcolhidaId}`:'')} readOnly placeholder="Selecione a acolhida (opcional)" />
+                  <div className="grid grid-cols-2 gap-2 mt-2">
+                    {filtroAcolhidaId ? (
+                      <Button type="button" variant="secondary" className="text-xl py-3" onClick={()=>{ setFiltroAcolhidaId(null); setFiltroAcolhidaNome('') }}>Limpar</Button>
+                    ) : (
+                      <div />
+                    )}
+                    <Button type="button" className="text-xl py-3" onClick={()=>{ setFilterPickerOpen(true); loadFilterPicker(); }}>Selecionar</Button>
+                  </div>
                 </div>
               </label>
             </div>
@@ -273,53 +284,92 @@ function SaidasPage(){
                 <option value="OUTRO">OUTRO</option>
               </select>
             </label>
-            <div className="md:col-span-4 flex gap-2 justify-end">
+            <div className="hidden md:flex md:col-span-4 gap-2 justify-end">
               <Button type="button" variant="secondary" onClick={()=>{ setFiltroAcolhidaId(null); setFiltroAcolhidaNome(''); setFiltroMotivo(''); setFiltroDe(null); setFiltroAte(null); load(); }}>Limpar</Button>
               <Button type="button" onClick={load}>Buscar</Button>
+            </div>
+            <div className="md:hidden grid grid-cols-2 gap-2 mt-2">
+              <Button type="button" variant="secondary" className="text-xl py-3" onClick={()=>{ setFiltroAcolhidaId(null); setFiltroAcolhidaNome(''); setFiltroMotivo(''); setFiltroDe(null); setFiltroAte(null); load(); }}>Limpar</Button>
+              <Button type="button" className="text-xl py-3" onClick={load}>Buscar</Button>
             </div>
           </div>
         </div>
         {loading ? (
           <div className="p-6 text-center text-lg">Carregando...</div>
         ) : (
-          <table className="w-full text-lg">
-            <thead className="bg-gray-100">
-              <tr>
+          <>
+            {/* Mobile: lista em cartões */}
+            <div className="md:hidden p-2 space-y-3">
+              {lista.map(s => (
+                <div key={s.id} className="bg-white rounded-xl border shadow-sm p-3">
+                  <div className="font-semibold text-base mb-1">{s.acolhidaNome || `ID ${s.acolhidaId}`}</div>
+                  <div className="text-sm text-gray-700 space-y-1">
+                    <div><span className="text-gray-500">Motivo:</span> {s.motivo}</div>
+                    <div><span className="text-gray-500">Saída:</span> {formatDateTimeBR(s.dataHoraSaida)}</div>
+                    <div><span className="text-gray-500">Retorno:</span> {s.dataHoraRetorno ? formatDateTimeBR(s.dataHoraRetorno) : '-'}</div>
+                    <div><span className="text-gray-500">Resp.:</span> {formatResponsavel(s.responsavel)}</div>
+                    <div><span className="text-gray-500">Duração:</span> {typeof s.duracaoMinutos === 'number' ? `${s.duracaoMinutos} min` : (s.dataHoraRetorno ? Math.round((new Date(s.dataHoraRetorno).getTime() - new Date(s.dataHoraSaida).getTime())/60000) : '-')}</div>
+                  </div>
+                  <div className="mt-3 flex gap-2">
+                    <Button onClick={()=>openEdit(s)} className="flex-1 text-xl px-6 py-3 md:text-lg md:px-4 md:py-2">Editar</Button>
+                    <Button onClick={()=>remove(s.id)} variant="danger" className="flex-1 text-xl px-6 py-3 md:text-lg md:px-4 md:py-2">Excluir</Button>
+                  </div>
+                </div>
+              ))}
+              {lista.length === 0 && (
+                <div className="p-4 text-center text-gray-600">Nenhum registro</div>
+              )}
+            </div>
+
+            {/* Desktop: tabela permanece inalterada */}
+            <table className="hidden md:table w-full text-lg">
+              <thead className="bg-gray-100">
+                <tr>
                   <th className="text-left p-3">Acolhida</th>
-                <th className="text-left p-3">Motivo</th>
+                  <th className="text-left p-3">Motivo</th>
                   <th className="text-left p-3">Saída</th>
                   <th className="text-left p-3">Retorno</th>
-                <th className="text-left p-3">Responsável</th>
-                <th className="text-left p-3">Duração (min)</th>
-                <th className="text-right p-3">Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {lista.map(s=> (
-                <tr key={s.id} className="border-t">
-                  <td className="p-3">{s.acolhidaNome || `ID ${s.acolhidaId}`}</td>
-                  <td className="p-3">{s.motivo}</td>
-                  <td className="p-3">{formatDateTimeBR(s.dataHoraSaida)}</td>
-                  <td className="p-3">{s.dataHoraRetorno ? formatDateTimeBR(s.dataHoraRetorno) : '-'}</td>
-                  <td className="p-3">{formatResponsavel(s.responsavel)}</td>
-                  <td className="p-3">{typeof s.duracaoMinutos === 'number' ? s.duracaoMinutos : (s.dataHoraRetorno ? Math.round((new Date(s.dataHoraRetorno).getTime() - new Date(s.dataHoraSaida).getTime())/60000) : '-')}</td>
-                  <td className="p-3 text-right">
-                    <Button onClick={()=>openEdit(s)} className="mr-2">Editar</Button>
-                    <Button onClick={()=>remove(s.id)} variant="danger">Excluir</Button>
-                  </td>
+                  <th className="text-left p-3">Responsável</th>
+                  <th className="text-left p-3">Duração (min)</th>
+                  <th className="text-right p-3">Ações</th>
                 </tr>
-              ))}
-              {(!loading && lista.length===0) && (
-                <tr><td className="p-4" colSpan={7}>Nenhum registro</td></tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {lista.map(s=> (
+                  <tr key={s.id} className="border-t">
+                    <td className="p-3">{s.acolhidaNome || `ID ${s.acolhidaId}`}</td>
+                    <td className="p-3">{s.motivo}</td>
+                    <td className="p-3">{formatDateTimeBR(s.dataHoraSaida)}</td>
+                    <td className="p-3">{s.dataHoraRetorno ? formatDateTimeBR(s.dataHoraRetorno) : '-'}</td>
+                    <td className="p-3">{formatResponsavel(s.responsavel)}</td>
+                    <td className="p-3">{typeof s.duracaoMinutos === 'number' ? s.duracaoMinutos : (s.dataHoraRetorno ? Math.round((new Date(s.dataHoraRetorno).getTime() - new Date(s.dataHoraSaida).getTime())/60000) : '-')}</td>
+                    <td className="p-3 text-right">
+                      <Button onClick={()=>openEdit(s)} className="mr-2">Editar</Button>
+                      <Button onClick={()=>remove(s.id)} variant="danger">Excluir</Button>
+                    </td>
+                  </tr>
+                ))}
+                {(!loading && lista.length===0) && (
+                  <tr><td className="p-4" colSpan={7}>Nenhum registro</td></tr>
+                )}
+              </tbody>
+            </table>
+          </>
         )}
+      </div>
+
+      {/* Barra fixa de ações (somente mobile) */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t z-40">
+        <div className="container p-3 flex gap-2">
+          <Button type="button" onClick={openGroupCreate} variant="secondary" className="flex-1 text-xl py-3 md:text-lg md:py-2">Em grupo</Button>
+          <Button type="button" onClick={openCreate} className="flex-1 text-xl py-3 md:text-lg md:py-2">Nova saída</Button>
+          <Button type="button" onClick={load} variant="secondary" className="flex-1 text-xl py-3 md:text-lg md:py-2">Atualizar</Button>
+        </div>
       </div>
 
       <Modal open={open} onClose={()=>setOpen(false)} title={editing? 'Editar saída' : 'Nova saída'}>
         <div className="space-y-4">
-          <div className="grid md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="md:col-span-2">
               <label className="block">
                 <span className="block mb-1">Acolhida</span>
@@ -357,21 +407,34 @@ function SaidasPage(){
             </div>
           </div>
         </div>
-        <div className="mt-6 flex justify-end gap-3">
-          <Button variant="secondary" onClick={()=>setOpen(false)}>Cancelar</Button>
-          <Button onClick={save}>Salvar</Button>
+        <div className="mt-6 flex flex-col-reverse md:flex-row md:justify-end gap-3">
+          <Button variant="secondary" onClick={()=>setOpen(false)} className="text-xl py-3 md:text-lg md:py-2">Cancelar</Button>
+          <Button onClick={save} className="text-xl py-3 md:text-lg md:py-2">Salvar</Button>
         </div>
       </Modal>
 
       {/* Modal filtro: selecionar acolhida */}
       <Modal open={filterPickerOpen} onClose={()=>setFilterPickerOpen(false)} title="Selecionar Acolhida (Filtro)">
         <div className="space-y-3">
-          <div className="grid gap-2 md:grid-cols-[1fr_auto] items-end">
+          <div className="grid gap-2 grid-cols-1 md:grid-cols-[1fr_auto] items-end">
             <Input label="Buscar por nome" value={filterPickerNome} onChange={e=>setFilterPickerNome(e.target.value)} />
-            <Button onClick={()=>loadFilterPicker()} type="button">Buscar</Button>
+            <Button onClick={()=>loadFilterPicker()} type="button" className="text-xl py-3 md:text-lg md:py-2">Buscar</Button>
           </div>
           <div className="bg-white rounded-xl border max-h-96 overflow-auto">
-            <table className="w-full text-lg">
+            <div className="md:hidden divide-y">
+              {filterPickerLoading ? (
+                <div className="p-4">Carregando...</div>
+              ) : filterPickerData.length===0 ? (
+                <div className="p-4">Nenhum registro</div>
+              ) : filterPickerData.map(a => (
+                <div key={a.id} className="p-3">
+                  <div className="font-medium text-base">{a.nomeCompleto}</div>
+                  <div className="text-sm text-gray-600 mb-2">{a.status}</div>
+                  <Button type="button" className="w-full text-xl py-3" onClick={()=>{ setFiltroAcolhidaId(a.id); setFiltroAcolhidaNome(a.nomeCompleto); setFilterPickerOpen(false); }}>Selecionar</Button>
+                </div>
+              ))}
+            </div>
+            <table className="hidden md:table w-full text-lg">
               <thead className="bg-gray-100">
                 <tr>
                   <th className="text-left p-3">Nome</th>
@@ -399,12 +462,25 @@ function SaidasPage(){
 
       <Modal open={pickerOpen} onClose={()=>setPickerOpen(false)} title="Selecionar Acolhida">
         <div className="space-y-3">
-          <div className="grid gap-2 md:grid-cols-[1fr_auto] items-end">
+          <div className="grid gap-2 grid-cols-1 md:grid-cols-[1fr_auto] items-end">
             <Input label="Buscar por nome" value={pickerNome} onChange={e=>setPickerNome(e.target.value)} />
-            <Button onClick={()=>loadPicker()} type="button">Buscar</Button>
+            <Button onClick={()=>loadPicker()} type="button" className="text-xl py-3 md:text-lg md:py-2">Buscar</Button>
           </div>
           <div className="bg-white rounded-xl border max-h-96 overflow-auto">
-            <table className="w-full text-lg">
+            <div className="md:hidden divide-y">
+              {pickerLoading ? (
+                <div className="p-4">Carregando...</div>
+              ) : pickerData.length===0 ? (
+                <div className="p-4">Nenhum registro</div>
+              ) : pickerData.map(a => (
+                <div key={a.id} className="p-3">
+                  <div className="font-medium text-base">{a.nomeCompleto}</div>
+                  <div className="text-sm text-gray-600 mb-2">{a.status}</div>
+                  <Button type="button" className="w-full text-xl py-3" onClick={()=>{ setForm({...form, acolhidaId:a.id}); setAcolhidaNome(a.nomeCompleto); setPickerOpen(false); }}>Selecionar</Button>
+                </div>
+              ))}
+            </div>
+            <table className="hidden md:table w-full text-lg">
               <thead className="bg-gray-100">
                 <tr>
                   <th className="text-left p-3">Nome</th>
@@ -437,7 +513,7 @@ function SaidasPage(){
           <div>
             <div className="flex items-center justify-between mb-2">
               <span className="block font-medium">Acolhidas Selecionadas ({groupSelected.length})</span>
-              <Button onClick={()=>{ setGroupPickerOpen(true); loadGroupPicker(); }} type="button" size="sm">Selecionar Acolhidas</Button>
+              <Button onClick={()=>{ setGroupPickerOpen(true); loadGroupPicker(); }} type="button" size="sm" className="text-base md:text-lg">Selecionar Acolhidas</Button>
             </div>
             <div className="bg-gray-50 rounded-lg p-3 min-h-[60px] max-h-32 overflow-auto">
               {groupSelected.length === 0 ? (
@@ -456,7 +532,7 @@ function SaidasPage(){
           </div>
 
           {/* Formulário comum */}
-          <div className="grid md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <label className="block">
               <span className="block mb-1">Motivo</span>
               <select className="w-full border rounded-lg p-3 text-lg" value={groupForm.motivo} onChange={e=>setGroupForm({...groupForm, motivo: e.target.value as any})}>
@@ -485,9 +561,9 @@ function SaidasPage(){
             </div>
           </div>
         </div>
-        <div className="mt-6 flex justify-end gap-3">
-          <Button variant="secondary" onClick={()=>setGroupOpen(false)}>Cancelar</Button>
-          <Button onClick={saveGroup}>Criar {groupSelected.length} Saídas</Button>
+        <div className="mt-6 flex flex-col-reverse md:flex-row md:justify-end gap-3">
+          <Button variant="secondary" onClick={()=>setGroupOpen(false)} className="text-xl py-3 md:text-lg md:py-2">Cancelar</Button>
+          <Button onClick={saveGroup} className="text-xl py-3 md:text-lg md:py-2">Criar {groupSelected.length} Saídas</Button>
         </div>
       </Modal>
 
@@ -499,7 +575,25 @@ function SaidasPage(){
             <Button onClick={()=>loadGroupPicker()} type="button">Buscar</Button>
           </div>
           <div className="bg-white rounded-xl border max-h-96 overflow-auto">
-            <table className="w-full text-lg">
+            <div className="md:hidden divide-y">
+              {groupPickerLoading ? (
+                <div className="p-4">Carregando...</div>
+              ) : groupPickerData.length===0 ? (
+                <div className="p-4">Nenhum registro</div>
+              ) : groupPickerData.map(a => {
+                const isSelected = groupSelected.some(s => s.id === a.id)
+                return (
+                  <label key={a.id} className="flex items-center gap-3 p-3">
+                    <input type="checkbox" className="w-5 h-5" checked={isSelected} onChange={()=>toggleGroupSelection({id: a.id, nomeCompleto: a.nomeCompleto})} />
+                    <div className="flex-1">
+                      <div className="font-medium text-base">{a.nomeCompleto}</div>
+                      <div className="text-sm text-gray-600">{a.status}</div>
+                    </div>
+                  </label>
+                )
+              })}
+            </div>
+            <table className="hidden md:table w-full text-lg">
               <thead className="bg-gray-100">
                 <tr>
                   <th className="text-left p-3">
