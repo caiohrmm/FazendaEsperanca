@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.Duration;
 import java.time.OffsetDateTime;
+import org.springframework.transaction.annotation.Transactional;
 
 @RestController
 @RequestMapping("/saidas-medicas")
@@ -31,7 +32,7 @@ public class SaidaMedicaController {
     @PreAuthorize("hasAnyRole('ADMIN','RESPONSAVEL','COLABORADOR')")
     @PostMapping
     @com.fazendaesperanca.fazendaesperanca.audit.AuditableAction(value = com.fazendaesperanca.fazendaesperanca.domain.enums.AuditAction.CREATE, entity = "SaidaMedica")
-    public SaidaMedica create(@Valid @RequestBody CriarSaidaRequest req, @AuthenticationPrincipal UserDetails user) {
+    public SaidaMedicaDTO create(@Valid @RequestBody CriarSaidaRequest req, @AuthenticationPrincipal UserDetails user) {
         Acolhida acolhida = acolhidaRepository.findById(req.getAcolhidaId()).orElseThrow();
         SaidaMedica s = new SaidaMedica();
         s.setAcolhida(acolhida);
@@ -41,10 +42,19 @@ public class SaidaMedicaController {
         s.setDataHoraSaida(req.getDataHoraSaida());
         s.setMeioTransporte(req.getMeioTransporte());
         s.setResponsavel(req.getResponsavel());
-        return repository.save(s);
+        s.setObservacoes(req.getObservacoes());
+        if (req.getDataHoraRetorno() != null) {
+            if (req.getDataHoraRetorno().isBefore(req.getDataHoraSaida())) {
+                throw new IllegalArgumentException("Retorno deve ser após saída");
+            }
+            s.setDataHoraRetorno(req.getDataHoraRetorno());
+        }
+        SaidaMedica saved = repository.save(s);
+        return toDto(saved);
     }
 
     @PreAuthorize("hasAnyRole('ADMIN','RESPONSAVEL','COLABORADOR','VISUALIZADOR')")
+    @Transactional(readOnly = true)
     @GetMapping
     public Page<SaidaMedicaDTO> list(@RequestParam(required = false) Long acolhidaId,
                                      @RequestParam(required = false) OffsetDateTime de,
@@ -60,20 +70,21 @@ public class SaidaMedicaController {
     }
 
     @PreAuthorize("hasAnyRole('ADMIN','RESPONSAVEL','COLABORADOR','VISUALIZADOR')")
+    @Transactional(readOnly = true)
     @GetMapping("/{id}")
     public SaidaMedicaDTO get(@PathVariable Long id) { return toDto(repository.findById(id).orElseThrow()); }
 
     @PreAuthorize("hasAnyRole('ADMIN','RESPONSAVEL','COLABORADOR')")
     @PutMapping("/{id}")
     @com.fazendaesperanca.fazendaesperanca.audit.AuditableAction(value = com.fazendaesperanca.fazendaesperanca.domain.enums.AuditAction.UPDATE, entity = "SaidaMedica", idParam = "id")
-    public SaidaMedica update(@PathVariable Long id, @Valid @RequestBody EditarSaidaRequest req) {
+    public SaidaMedicaDTO update(@PathVariable Long id, @Valid @RequestBody EditarSaidaRequest req) {
         SaidaMedica s = repository.findById(id).orElseThrow();
         if (s.getDataHoraRetorno() != null) throw new IllegalArgumentException("Não é permitido editar após retorno");
         s.setMotivo(req.getMotivo());
         s.setDestino(req.getDestino());
         s.setProfissional(req.getProfissional());
         s.setMeioTransporte(req.getMeioTransporte());
-        return repository.save(s);
+        return toDto(repository.save(s));
     }
 
     @PreAuthorize("hasAnyRole('ADMIN','RESPONSAVEL','COLABORADOR')")
@@ -100,6 +111,7 @@ public class SaidaMedicaController {
         SaidaMedicaDTO dto = new SaidaMedicaDTO();
         dto.setId(s.getId());
         dto.setAcolhidaId(s.getAcolhida().getId());
+        dto.setAcolhidaNome(s.getAcolhida().getNomeCompleto());
         dto.setMotivo(s.getMotivo());
         dto.setDestino(s.getDestino());
         dto.setProfissional(s.getProfissional());
@@ -107,6 +119,7 @@ public class SaidaMedicaController {
         dto.setDataHoraRetorno(s.getDataHoraRetorno());
         dto.setMeioTransporte(s.getMeioTransporte());
         dto.setObservacoes(s.getObservacoes());
+        dto.setResponsavel(s.getResponsavel());
         dto.setDuracaoMinutos(duracaoMinutos);
         return dto;
     }
@@ -121,6 +134,7 @@ public class SaidaMedicaController {
         private String meioTransporte;
         private String observacoes;
         private com.fazendaesperanca.fazendaesperanca.domain.enums.ResponsavelSaidaMedica responsavel;
+        private OffsetDateTime dataHoraRetorno;
     }
 
     @Data
@@ -140,6 +154,7 @@ public class SaidaMedicaController {
     public static class SaidaMedicaDTO {
         private Long id;
         private Long acolhidaId;
+        private String acolhidaNome;
         private MotivoSaidaMedica motivo;
         private String destino;
         private String profissional;
@@ -147,6 +162,7 @@ public class SaidaMedicaController {
         private OffsetDateTime dataHoraRetorno;
         private String meioTransporte;
         private String observacoes;
+        private com.fazendaesperanca.fazendaesperanca.domain.enums.ResponsavelSaidaMedica responsavel;
         private Long duracaoMinutos;
     }
 }

@@ -10,15 +10,19 @@ import { loadingBus } from '../../system/loadingBus'
 type Saida = {
   id: number
   acolhidaId: number
+  acolhidaNome?: string
   motivo: 'CONSULTA'|'EXAME'|'RETORNO'|'OUTRO'
   destino: string
+  profissional?: string
   dataHoraSaida: string
   dataHoraRetorno?: string
+  meioTransporte?: string
+  observacoes?: string
   responsavel?: 'ALCILEIA_FIGUEREDO'|'MARIA_ASSUNCION'
   duracaoMinutos?: number
 }
 
-export default function SaidasPage(){
+function SaidasPage(){
   const toast = useToast()
   const [lista, setLista] = useState<Saida[]>([])
   const [loading, setLoading] = useState(true)
@@ -26,7 +30,13 @@ export default function SaidasPage(){
   const [editing, setEditing] = useState<Saida | null>(null)
   const [form, setForm] = useState({ acolhidaId: 0, motivo: 'CONSULTA' as Saida['motivo'], destino: '', profissional: '', data: null as string | null, hora: '', meioTransporte:'', observacoes:'', responsavel: 'ALCILEIA_FIGUEREDO' as Saida['responsavel'], retornoData: null as string | null, retornoHora: '' })
   const [acolhidaNome, setAcolhidaNome] = useState<string>('')
-  const [acolhidaNames, setAcolhidaNames] = useState<Record<number,string>>({})
+
+  // Filtros
+  const [filtroAcolhidaId, setFiltroAcolhidaId] = useState<number | null>(null)
+  const [filtroAcolhidaNome, setFiltroAcolhidaNome] = useState<string>('')
+  const [filtroMotivo, setFiltroMotivo] = useState<'' | Saida['motivo']>('')
+  const [filtroDe, setFiltroDe] = useState<string | null>(null)
+  const [filtroAte, setFiltroAte] = useState<string | null>(null)
 
   // Picker de acolhidas
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -42,18 +52,23 @@ export default function SaidasPage(){
   const [groupPickerData, setGroupPickerData] = useState<Array<{id:number; nomeCompleto:string; status:string}>>([])
   const [groupSelected, setGroupSelected] = useState<Array<{id:number; nomeCompleto:string}>>([])
 
+  // Picker para filtro por acolhida
+  const [filterPickerOpen, setFilterPickerOpen] = useState(false)
+  const [filterPickerNome, setFilterPickerNome] = useState('')
+  const [filterPickerLoading, setFilterPickerLoading] = useState(false)
+  const [filterPickerData, setFilterPickerData] = useState<Array<{id:number; nomeCompleto:string; status:string}>>([])
+
   const load = async()=>{
     setLoading(true); loadingBus.start()
     try{
-      const { data } = await axios.get('/saidas-medicas', { params: { page:0, size:20 }})
+      const params:any = { page:0, size:20 }
+      if (filtroAcolhidaId) params.acolhidaId = filtroAcolhidaId
+      if (filtroDe) params.de = buildLocalDateTime(filtroDe, '00:00').toISOString()
+      if (filtroAte) params.ate = buildLocalDateTime(filtroAte, '23:59').toISOString()
+      if (filtroMotivo) params.motivo = filtroMotivo
+      const { data } = await axios.get('/saidas-medicas', { params })
       const content = data.content?.map((d:any)=> ({ ...d })) ?? []
       setLista(content)
-      // carregar nomes das acolhidas exibidas
-      const ids: number[] = Array.from(new Set((content as any[]).map(s=> s.acolhidaId).filter((v:any)=> typeof v==='number')))
-      const nameEntries = await Promise.allSettled(ids.map(id=> axios.get(`/acolhidas/${id}`).then(res=> [id, res.data?.nomeCompleto || `ID ${id}`] as [number,string])))
-      const nameMap: Record<number,string> = {}
-      nameEntries.forEach(r=>{ if (r.status==='fulfilled'){ const [id, nome] = r.value; nameMap[id]=nome } })
-      setAcolhidaNames(prev=> ({ ...prev, ...nameMap }))
     } catch(e:any){ toast.error('Falha ao carregar saídas') }
     finally { setLoading(false); loadingBus.end() }
   }
@@ -74,13 +89,20 @@ export default function SaidasPage(){
     } finally { setGroupPickerLoading(false) }
   }
 
+  const loadFilterPicker = async()=>{
+    setFilterPickerLoading(true)
+    try{
+      const { data } = await axios.get('/acolhidas', { params: { page:0, size:50, nome: filterPickerNome || undefined, status: 'ATIVA' }})
+      setFilterPickerData(Array.isArray(data?.content) ? data.content : [])
+    } finally { setFilterPickerLoading(false) }
+  }
+
   useEffect(()=>{ load() },[])
 
   const openCreate = ()=>{ setEditing(null); setForm({ acolhidaId: 0, motivo:'CONSULTA', destino:'', profissional:'', data:null, hora:'', meioTransporte:'', observacoes:'', responsavel:'ALCILEIA_FIGUEREDO', retornoData:null, retornoHora:'' }); setAcolhidaNome(''); setOpen(true) }
   const openEdit = (s: Saida)=>{ setEditing(s); const dt = new Date(s.dataHoraSaida); const isoDate = new Date(dt.getTime() - dt.getTimezoneOffset()*60000).toISOString().slice(0,10); const time = dt.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',hour12:false}); const retornoDt = s.dataHoraRetorno ? new Date(s.dataHoraRetorno) : null; const retornoDate = retornoDt ? new Date(retornoDt.getTime() - retornoDt.getTimezoneOffset()*60000).toISOString().slice(0,10) : null; const retornoHora = retornoDt ? retornoDt.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',hour12:false}) : '';
-    setForm({ acolhidaId: s.acolhidaId, motivo:s.motivo, destino:s.destino, profissional:(s as any).profissional||'', data: isoDate, hora: time, meioTransporte:(s as any).meioTransporte||'', observacoes:(s as any).observacoes||'', responsavel: s.responsavel||'ALCILEIA_FIGUEREDO', retornoData: retornoDate, retornoHora });
-    // Buscar nome da acolhida para exibir
-    axios.get(`/acolhidas/${s.acolhidaId}`).then(res=> setAcolhidaNome(res.data?.nomeCompleto || '')).catch(()=> setAcolhidaNome(''));
+    setForm({ acolhidaId: s.acolhidaId, motivo:s.motivo, destino:s.destino, profissional:s.profissional||'', data: isoDate, hora: time, meioTransporte:s.meioTransporte||'', observacoes:s.observacoes||'', responsavel: s.responsavel||'ALCILEIA_FIGUEREDO', retornoData: retornoDate, retornoHora });
+    setAcolhidaNome(s.acolhidaNome || '');
     setOpen(true)
   }
   const validate = ()=>{
@@ -90,6 +112,12 @@ export default function SaidasPage(){
     if (!form.hora || !/^\d{2}:\d{2}$/.test(form.hora)) { toast.error('Hora inválida'); return false }
     const [hh,mm] = form.hora.split(':').map(n=>parseInt(n,10));
     if (isNaN(hh) || isNaN(mm) || hh<0 || hh>23 || mm<0 || mm>59) { toast.error('Hora inválida'); return false }
+    // Data de saída não pode estar muito distante (ex.: +/- 1 ano) do dia atual
+    const hoje = new Date(); hoje.setHours(0,0,0,0)
+    const saidaDia = buildLocalDateTime(form.data, '00:00')
+    const umAnoMs = 365*24*60*60*1000
+    if (Math.abs(saidaDia.getTime()) - hoje.getTime() > umAnoMs) { toast.error('Data da saída muito distante do dia atual (±1 ano)'); return false }
+    if (saidaDia.getTime() > hoje.getTime()) { toast.error('Data da saída não pode ser no futuro'); return false }
     if ((form.retornoData && !form.retornoHora) || (!form.retornoData && form.retornoHora)) { toast.error('Informe data e hora do retorno ou deixe ambos vazios'); return false }
     if (form.retornoData && form.retornoHora) {
       const saida = buildLocalDateTime(form.data!, form.hora)
@@ -101,14 +129,24 @@ export default function SaidasPage(){
   const save = async()=>{
     if (!validate()) return
     const dataHoraSaida = buildLocalDateTime(form.data!, form.hora).toISOString()
-    const payload:any = { acolhidaId: form.acolhidaId, motivo: form.motivo, destino: form.destino, profissional: form.profissional || null, dataHoraSaida, meioTransporte: form.meioTransporte || null, observacoes: form.observacoes || null, responsavel: form.responsavel }
-    if (form.retornoData && form.retornoHora) {
-      payload.dataHoraRetorno = buildLocalDateTime(form.retornoData, form.retornoHora).toISOString()
-    }
     loadingBus.start()
     try{
-      if (editing) { await axios.put(`/saidas-medicas/${editing.id}`, payload) }
-      else { await axios.post('/saidas-medicas', payload) }
+      if (editing) {
+        // Atualiza detalhes permitidos
+        const updateReq:any = { motivo: form.motivo, destino: form.destino, profissional: form.profissional || null, meioTransporte: form.meioTransporte || null }
+        await axios.put(`/saidas-medicas/${editing.id}`, updateReq)
+        // Registra retorno se informado e ainda não existe
+        if (form.retornoData && form.retornoHora && !editing.dataHoraRetorno) {
+          const dataHoraRetorno = buildLocalDateTime(form.retornoData, form.retornoHora).toISOString()
+          await axios.put(`/saidas-medicas/${editing.id}/retorno`, { dataHoraRetorno })
+        }
+      } else {
+        const payload:any = { acolhidaId: form.acolhidaId, motivo: form.motivo, destino: form.destino, profissional: form.profissional || null, dataHoraSaida, meioTransporte: form.meioTransporte || null, observacoes: form.observacoes || null, responsavel: form.responsavel }
+        if (form.retornoData && form.retornoHora) {
+          payload.dataHoraRetorno = buildLocalDateTime(form.retornoData, form.retornoHora).toISOString()
+        }
+        await axios.post('/saidas-medicas', payload)
+      }
       setOpen(false); toast.success('Salvo com sucesso'); await load()
     } catch(e:any){ toast.error(e?.response?.data?.message ?? 'Erro ao salvar') }
     finally { loadingBus.end() }
@@ -135,18 +173,30 @@ export default function SaidasPage(){
     if (!groupForm.hora || !/^\d{2}:\d{2}$/.test(groupForm.hora)) { toast.error('Hora inválida'); return false }
     const [hh,mm] = groupForm.hora.split(':').map(n=>parseInt(n,10));
     if (isNaN(hh) || isNaN(mm) || hh<0 || hh>23 || mm<0 || mm>59) { toast.error('Hora inválida'); return false }
+    // Janela de ±1 ano
+    const hoje = new Date(); hoje.setHours(0,0,0,0)
+    const saidaDia = buildLocalDateTime(groupForm.data, '00:00')
+    const umAnoMs = 365*24*60*60*1000
+    if (Math.abs(saidaDia.getTime() - hoje.getTime()) > umAnoMs) { toast.error('Data da saída muito distante do dia atual (±1 ano)'); return false }
+    // Retorno opcional, mas se tiver um precisa do outro
+    if ((groupForm.retornoData && !groupForm.retornoHora) || (!groupForm.retornoData && groupForm.retornoHora)) { toast.error('Informe data e hora do retorno ou deixe ambos vazios'); return false }
+    if (groupForm.retornoData && groupForm.retornoHora) {
+      const saida = buildLocalDateTime(groupForm.data!, groupForm.hora)
+      const retorno = buildLocalDateTime(groupForm.retornoData, groupForm.retornoHora)
+      if (retorno < saida) { toast.error('Retorno não pode ser antes da saída'); return false }
+    }
     return true
   }
 
   const saveGroup = async()=>{
     if (!validateGroup()) return
-    const dataHoraSaida = new Date(`${groupForm.data}T${groupForm.hora}:00Z`).toISOString()
+    const dataHoraSaida = buildLocalDateTime(groupForm.data!, groupForm.hora).toISOString()
     
     loadingBus.start()
     try{
       // Criar uma saída para cada acolhida selecionada
       const promises = groupSelected.map(acolhida => {
-        const payload = { 
+        const payload:any = { 
           acolhidaId: acolhida.id, 
           motivo: groupForm.motivo, 
           destino: groupForm.destino, 
@@ -155,6 +205,9 @@ export default function SaidasPage(){
           meioTransporte: groupForm.meioTransporte || null, 
           observacoes: groupForm.observacoes || null, 
           responsavel: groupForm.responsavel 
+        }
+        if (groupForm.retornoData && groupForm.retornoHora) {
+          payload.dataHoraRetorno = buildLocalDateTime(groupForm.retornoData, groupForm.retornoHora).toISOString()
         }
         return axios.post('/saidas-medicas', payload)
       })
@@ -189,6 +242,43 @@ export default function SaidasPage(){
         </div>
       </div>
       <div className="bg-white rounded-xl shadow overflow-hidden">
+        {/* Filtros */}
+        <div className="p-4 border-b bg-white">
+          <div className="grid md:grid-cols-4 gap-3 items-end">
+            <div className="md:col-span-2">
+              <label className="block">
+                <span className="block mb-1">Acolhida</span>
+                <div className="flex gap-2">
+                  <input className="flex-1 border rounded-lg p-3 text-lg bg-gray-50" value={filtroAcolhidaNome || (filtroAcolhidaId?`ID ${filtroAcolhidaId}`:'')} readOnly placeholder="Selecione a acolhida (opcional)" />
+                  {filtroAcolhidaId && (<Button type="button" variant="secondary" onClick={()=>{ setFiltroAcolhidaId(null); setFiltroAcolhidaNome('') }}>Limpar</Button>)}
+                  <Button type="button" onClick={()=>{ setFilterPickerOpen(true); loadFilterPicker(); }}>Selecionar</Button>
+                </div>
+              </label>
+            </div>
+            <label className="block">
+              <span className="block mb-1">De</span>
+              <DateInput label="" value={filtroDe} onChange={setFiltroDe} />
+            </label>
+            <label className="block">
+              <span className="block mb-1">Até</span>
+              <DateInput label="" value={filtroAte} onChange={setFiltroAte} />
+            </label>
+            <label className="block">
+              <span className="block mb-1">Motivo</span>
+              <select className="w-full border rounded-lg p-3 text-lg" value={filtroMotivo} onChange={e=> setFiltroMotivo(e.target.value as any)}>
+                <option value="">Todos</option>
+                <option value="CONSULTA">CONSULTA</option>
+                <option value="EXAME">EXAME</option>
+                <option value="RETORNO">RETORNO</option>
+                <option value="OUTRO">OUTRO</option>
+              </select>
+            </label>
+            <div className="md:col-span-4 flex gap-2 justify-end">
+              <Button type="button" variant="secondary" onClick={()=>{ setFiltroAcolhidaId(null); setFiltroAcolhidaNome(''); setFiltroMotivo(''); setFiltroDe(null); setFiltroAte(null); load(); }}>Limpar</Button>
+              <Button type="button" onClick={load}>Buscar</Button>
+            </div>
+          </div>
+        </div>
         {loading ? (
           <div className="p-6 text-center text-lg">Carregando...</div>
         ) : (
@@ -207,7 +297,7 @@ export default function SaidasPage(){
             <tbody>
               {lista.map(s=> (
                 <tr key={s.id} className="border-t">
-                  <td className="p-3">{acolhidaNames[s.acolhidaId] || `ID ${s.acolhidaId}`}</td>
+                  <td className="p-3">{s.acolhidaNome || `ID ${s.acolhidaId}`}</td>
                   <td className="p-3">{s.motivo}</td>
                   <td className="p-3">{formatDateTimeBR(s.dataHoraSaida)}</td>
                   <td className="p-3">{s.dataHoraRetorno ? formatDateTimeBR(s.dataHoraRetorno) : '-'}</td>
@@ -250,9 +340,9 @@ export default function SaidasPage(){
             </label>
             <Input label="Destino" value={form.destino} onChange={e=>setForm({...form, destino:e.target.value})} placeholder="Hospital Municipal" />
             <Input label="Profissional" value={form.profissional} onChange={e=>setForm({...form, profissional:e.target.value})} placeholder="Dra. Ana" />
-            <DateInput label="Data da saída" value={form.data} onChange={(v)=>setForm({...form, data: v})} />
-            <TimeInput label="Hora da saída (HH:mm)" value={form.hora} onChange={(v)=>setForm({...form, hora:v})} placeholder="08:30" />
-            <DateInput label="Data do retorno (opcional)" value={form.retornoData} onChange={(v)=>setForm({...form, retornoData: v})} />
+            <DateInput label="Data da saída" value={form.data} onChange={(v)=>setForm({...form, data: v, retornoData: v && (!form.retornoData || form.retornoData === '') ? v : form.retornoData })} />
+            <TimeInput label="Hora da saída" value={form.hora} onChange={(v)=>setForm({...form, hora:v})} placeholder="08:30" />
+            <DateInput label="Data do retorno (opcional)" value={form.retornoData} onChange={(v)=>setForm({...form, retornoData: v || form.data })} />
             <TimeInput label="Hora do retorno (opcional)" value={form.retornoHora} onChange={(v)=>setForm({...form, retornoHora: v})} placeholder="10:30" />
             <Input label="Meio de transporte" value={form.meioTransporte} onChange={e=>setForm({...form, meioTransporte:e.target.value})} placeholder="Carro" />
             <label className="block">
@@ -270,6 +360,40 @@ export default function SaidasPage(){
         <div className="mt-6 flex justify-end gap-3">
           <Button variant="secondary" onClick={()=>setOpen(false)}>Cancelar</Button>
           <Button onClick={save}>Salvar</Button>
+        </div>
+      </Modal>
+
+      {/* Modal filtro: selecionar acolhida */}
+      <Modal open={filterPickerOpen} onClose={()=>setFilterPickerOpen(false)} title="Selecionar Acolhida (Filtro)">
+        <div className="space-y-3">
+          <div className="grid gap-2 md:grid-cols-[1fr_auto] items-end">
+            <Input label="Buscar por nome" value={filterPickerNome} onChange={e=>setFilterPickerNome(e.target.value)} />
+            <Button onClick={()=>loadFilterPicker()} type="button">Buscar</Button>
+          </div>
+          <div className="bg-white rounded-xl border max-h-96 overflow-auto">
+            <table className="w-full text-lg">
+              <thead className="bg-gray-100">
+                <tr>
+                  <th className="text-left p-3">Nome</th>
+                  <th className="text-left p-3">Status</th>
+                  <th className="text-right p-3">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filterPickerLoading ? (
+                  <tr><td className="p-4" colSpan={3}>Carregando...</td></tr>
+                ) : filterPickerData.length===0 ? (
+                  <tr><td className="p-4" colSpan={3}>Nenhum registro</td></tr>
+                ) : filterPickerData.map(a => (
+                  <tr key={a.id} className="border-t">
+                    <td className="p-3">{a.nomeCompleto}</td>
+                    <td className="p-3">{a.status}</td>
+                    <td className="p-3 text-right"><Button type="button" onClick={()=>{ setFiltroAcolhidaId(a.id); setFiltroAcolhidaNome(a.nomeCompleto); setFilterPickerOpen(false); }}>Selecionar</Button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </Modal>
 
@@ -344,9 +468,9 @@ export default function SaidasPage(){
             </label>
             <Input label="Destino" value={groupForm.destino} onChange={e=>setGroupForm({...groupForm, destino:e.target.value})} placeholder="Hospital Municipal" />
             <Input label="Profissional" value={groupForm.profissional} onChange={e=>setGroupForm({...groupForm, profissional:e.target.value})} placeholder="Dra. Ana" />
-            <DateInput label="Data da saída" value={groupForm.data} onChange={(v)=>setGroupForm({...groupForm, data: v})} />
-            <TimeInput label="Hora da saída (HH:mm)" value={groupForm.hora} onChange={(v)=>setGroupForm({...groupForm, hora:v})} placeholder="08:30" />
-            <DateInput label="Data do retorno (opcional)" value={groupForm.retornoData} onChange={(v)=>setGroupForm({...groupForm, retornoData: v})} />
+            <DateInput label="Data da saída" value={groupForm.data} onChange={(v)=>setGroupForm({...groupForm, data: v, retornoData: v && (!groupForm.retornoData || groupForm.retornoData === '') ? v : groupForm.retornoData })} />
+            <TimeInput label="Hora da saída" value={groupForm.hora} onChange={(v)=>setGroupForm({...groupForm, hora:v})} placeholder="08:30" />
+            <DateInput label="Data do retorno (opcional)" value={groupForm.retornoData} onChange={(v)=>setGroupForm({...groupForm, retornoData: v || groupForm.data })} />
             <TimeInput label="Hora do retorno (opcional)" value={groupForm.retornoHora} onChange={(v)=>setGroupForm({...groupForm, retornoHora: v})} placeholder="10:30" />
             <Input label="Meio de transporte" value={groupForm.meioTransporte} onChange={e=>setGroupForm({...groupForm, meioTransporte:e.target.value})} placeholder="Carro" />
             <label className="block">
@@ -433,28 +557,13 @@ export default function SaidasPage(){
   )
 }
 
+export default SaidasPage
+
 function TimeInput({ label, value, onChange, placeholder }:{ label:string; value:string; onChange:(v:string)=>void; placeholder?:string }){
-  const mask = (v:string)=>{
-    const d = v.replace(/\D/g,'').slice(0,4)
-    let h = d.slice(0,2)
-    let m = d.slice(2,4)
-    if (h.length===2) {
-      let hi = parseInt(h,10)
-      if (isNaN(hi)) hi = 0
-      if (hi > 23) h = '23'
-    }
-    if (m.length===2) {
-      let mi = parseInt(m,10)
-      if (isNaN(mi)) mi = 0
-      if (mi > 59) m = '59'
-    }
-    return m.length>0 ? `${h.padStart(2,'0')}:${m.padStart(2,'0')}` : h
-  }
-  const display = value
   return (
     <label className="block">
       <span className="block mb-1">{label}</span>
-      <input className="w-full border rounded-lg p-3 text-lg" value={display} onChange={(e)=> onChange(mask(e.target.value))} placeholder={placeholder} inputMode="numeric" />
+      <input type="time" className="w-full border rounded-lg p-3 text-lg" value={value} onChange={(e)=> onChange(e.target.value)} placeholder={placeholder} />
     </label>
   )
 }
