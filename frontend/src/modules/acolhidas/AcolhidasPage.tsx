@@ -32,7 +32,6 @@ export default function AcolhidasPage() {
     documento: "",
     telefone: "",
     status: "ATIVA" as "ATIVA" | "EGRESSA",
-    fotoUrl: "",
     observacoes: "",
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -84,7 +83,6 @@ export default function AcolhidasPage() {
       documento: "",
       telefone: "",
       status: "ATIVA",
-      fotoUrl: "",
       observacoes: "",
     });
     setOpen(true);
@@ -98,7 +96,6 @@ export default function AcolhidasPage() {
       documento: (a as any).documento || "",
       telefone: (a as any).telefone || "",
       status: a.status,
-      fotoUrl: (a as any).fotoUrl || "",
       observacoes: (a as any).observacoes || "",
     });
     setOpen(true);
@@ -134,7 +131,6 @@ export default function AcolhidasPage() {
       documento: form.documento || null,
       dataNascimento: form.dataNascimento || null,
       dataEntrada: form.dataEntrada || null,
-      fotoUrl: form.fotoUrl || null,
       observacoes: form.observacoes || null,
     };
     loadingBus.start();
@@ -316,11 +312,7 @@ export default function AcolhidasPage() {
               <option value="EGRESSA">EGRESSA</option>
             </select>
           </label>
-          <Input
-            label="Foto URL"
-            value={form.fotoUrl}
-            onChange={(e) => setForm({ ...form, fotoUrl: e.target.value })}
-          />
+          {/* Campo de Foto URL removido da UI */}
           <Input
             label="Observações"
             value={form.observacoes}

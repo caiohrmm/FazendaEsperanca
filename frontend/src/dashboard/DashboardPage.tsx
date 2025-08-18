@@ -65,7 +65,7 @@ export default function DashboardPage(){
       </div>
       <div className="flex items-center gap-3">
         <img src="/logo.png" alt="Logo" className="h-10 w-auto" />
-        <h1 className="text-3xl font-bold">Bem-vindo(a) à Fazenda Esperança</h1>
+        <h1 className="text-3xl font-bold">Bem-vindo(a) à Fazenda Esperança São Domingos Gusmão</h1>
       </div>
       {loading && <div>Carregando...</div>}
       {error && <div className="text-red-600">{error}</div>}

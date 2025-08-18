@@ -59,6 +59,10 @@ public class TransacaoFinanceiraController {
             if (req.getAcolhidaId() == null) throw new IllegalArgumentException("acolhidaId é obrigatório");
             Acolhida acolhida = acolhidaRepository.findById(req.getAcolhidaId()).orElseThrow();
             t.setAcolhida(acolhida);
+            // Vincular automaticamente o documento da acolhida à transação
+            if (acolhida.getDocumento() != null && !acolhida.getDocumento().isBlank()) {
+                t.setOrigemDocumento(acolhida.getDocumento());
+            }
         }
         if (req.getValor() == null || req.getValor().compareTo(BigDecimal.ZERO) <= 0) throw new IllegalArgumentException("valor deve ser > 0");
         t.setValor(req.getValor());
@@ -225,7 +229,8 @@ public class TransacaoFinanceiraController {
 
     @PreAuthorize("hasAnyRole('ADMIN','RESPONSAVEL','COLABORADOR','VISUALIZADOR')")
     @GetMapping
-    public Page<TransacaoFinanceira> list(@RequestParam(required = false) TipoTransacao tipo,
+    @Transactional(readOnly = true)
+    public Page<TransacaoResumoDTO> list(@RequestParam(required = false) TipoTransacao tipo,
                                           @RequestParam(required = false) FormaPagamento formaPagamento,
                                           @RequestParam(required = false) Long acolhidaId,
                                           @RequestParam(required = false) StatusTransacao status,
@@ -239,7 +244,19 @@ public class TransacaoFinanceiraController {
         if (status != null) spec = spec.and((r,q,cb) -> cb.equal(r.get("status"), status));
         if (de != null) spec = spec.and((r,q,cb) -> cb.greaterThanOrEqualTo(r.get("dataHora"), de));
         if (ate != null) spec = spec.and((r,q,cb) -> cb.lessThanOrEqualTo(r.get("dataHora"), ate));
-        return repository.findAll(spec, pageable);
+        Page<TransacaoFinanceira> page = repository.findAll(spec, pageable);
+        return page.map(t -> {
+            TransacaoResumoDTO dto = new TransacaoResumoDTO();
+            dto.setId(t.getId());
+            dto.setTipo(t.getTipo());
+            dto.setValor(t.getValor());
+            dto.setFormaPagamento(t.getFormaPagamento());
+            dto.setNumeroRecibo(t.getNumeroRecibo());
+            dto.setDataHora(t.getDataHora());
+            dto.setAcolhidaNome(t.getAcolhida() != null ? t.getAcolhida().getNomeCompleto() : null);
+            dto.setOrigemNome(t.getOrigemNome());
+            return dto;
+        });
     }
 
     @PreAuthorize("hasAnyRole('ADMIN','RESPONSAVEL','COLABORADOR','VISUALIZADOR')")
@@ -277,6 +294,18 @@ public class TransacaoFinanceiraController {
         @NotNull
         private FormaPagamento formaPagamento;
         private String descricao;
+    }
+
+    @Data
+    public static class TransacaoResumoDTO {
+        private Long id;
+        private TipoTransacao tipo;
+        private java.math.BigDecimal valor;
+        private FormaPagamento formaPagamento;
+        private String numeroRecibo;
+        private OffsetDateTime dataHora;
+        private String origemNome;
+        private String acolhidaNome;
     }
 }
 

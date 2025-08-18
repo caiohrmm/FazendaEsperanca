@@ -16,6 +16,8 @@ type Transacao = {
   status: 'PENDENTE_ASSINATURA'|'CONCLUIDA'|'CANCELADA'
   dataHora: string
   arquivoAssinadoPath?: string | null
+  origemNome?: string | null
+  acolhidaNome?: string | null
 }
 
 const tipoLabel: Record<Transacao['tipo'], string> = {
@@ -29,11 +31,7 @@ const formaLabel: Record<Transacao['formaPagamento'], string> = {
   CARTAO: 'Cartão',
   TRANSFERENCIA: 'Transferência'
 }
-const statusLabel: Record<Transacao['status'], string> = {
-  PENDENTE_ASSINATURA: 'Pendente de Assinatura',
-  CONCLUIDA: 'Concluída',
-  CANCELADA: 'Cancelada'
-}
+// status e assinatura não são mais exibidos na UI
 
 export default function TransacoesPage(){
   const toast = useToast()
@@ -43,7 +41,6 @@ export default function TransacoesPage(){
   // Filtros
   const [filtroTipo, setFiltroTipo] = useState<''|Transacao['tipo']>('')
   const [filtroForma, setFiltroForma] = useState<''|Transacao['formaPagamento']>('')
-  const [filtroStatus, setFiltroStatus] = useState<''|Transacao['status']>('')
   const [filtroAcolhidaId, setFiltroAcolhidaId] = useState<number | null>(null)
   const [filtroAcolhidaNome, setFiltroAcolhidaNome] = useState<string>('')
   const [filtroDe, setFiltroDe] = useState<string | null>(null)
@@ -57,7 +54,7 @@ export default function TransacoesPage(){
 
   // Modal criação
   const [openCreate, setOpenCreate] = useState(false)
-  const [form, setForm] = useState({ tipo: 'DOACAO_EXTERNA' as Transacao['tipo'], origemNome: '', origemDocumento: '', acolhidaId: 0, acolhidaNome: '', valor: '', data: null as string | null, hora: '', formaPagamento: 'PIX' as Transacao['formaPagamento'], descricao: '' })
+  const [form, setForm] = useState({ tipo: 'DOACAO_EXTERNA' as Transacao['tipo'], origemNome: '', origemDocumento: '', acolhidaId: 0, acolhidaNome: '', valor: '' /* digits only cents */, data: null as string | null, hora: '', formaPagamento: 'PIX' as Transacao['formaPagamento'], descricao: '' })
   const [formAcolhidaPickerOpen, setFormAcolhidaPickerOpen] = useState(false)
   const [formPickerNome, setFormPickerNome] = useState('')
   const [formPickerLoading, setFormPickerLoading] = useState(false)
@@ -71,7 +68,6 @@ export default function TransacoesPage(){
       const params:any = { page:0, size:20 }
       if (filtroTipo) params.tipo = filtroTipo
       if (filtroForma) params.formaPagamento = filtroForma
-      if (filtroStatus) params.status = filtroStatus
       if (filtroAcolhidaId) params.acolhidaId = filtroAcolhidaId
       if (filtroDe) params.de = buildLocalDateTime(filtroDe, '00:00').toISOString()
       if (filtroAte) params.ate = buildLocalDateTime(filtroAte, '23:59').toISOString()
@@ -91,14 +87,6 @@ export default function TransacoesPage(){
     URL.revokeObjectURL(url)
   }
 
-  const cancelar = async(id:number)=>{
-    if (!confirm('Tem certeza que deseja cancelar esta transação?')) return
-    loadingBus.start()
-    try{ await axios.post(`/transacoes/${id}/cancelar`); toast.success('Transação cancelada'); await load() }
-    catch(e:any){ toast.error(e?.response?.data?.message ?? 'Falha ao cancelar') }
-    finally { loadingBus.end() }
-  }
-
   const save = async()=>{
     // validação mínima
     if (!form.tipo) { toast.error('Informe o tipo'); return }
@@ -107,7 +95,7 @@ export default function TransacoesPage(){
     } else {
       if (!form.acolhidaId || form.acolhidaId <= 0) { toast.error('Selecione a acolhida'); return }
     }
-    const valorNum = Number(String(form.valor).replace(',', '.'))
+    const valorNum = parseCurrencyFromDigits(form.valor)
     if (!isFinite(valorNum) || valorNum <= 0) { toast.error('Valor inválido'); return }
     const payload:any = {
       tipo: form.tipo,
@@ -121,7 +109,7 @@ export default function TransacoesPage(){
     } else {
       payload.acolhidaId = form.acolhidaId
     }
-    if (form.data && form.hora) payload.dataHora = buildLocalDateTime(form.data, form.hora).toISOString()
+    if (form.data && form.hora) payload.dataHora = toLocalOffsetIso(buildLocalDateTime(form.data, form.hora))
 
     loadingBus.start()
     try{
@@ -200,15 +188,6 @@ export default function TransacoesPage(){
               </select>
             </label>
             <label className="block">
-              <span className="block mb-1">Status</span>
-              <select className="w-full border rounded-lg p-3 text-lg" value={filtroStatus} onChange={e=> setFiltroStatus(e.target.value as any)}>
-                <option value="">Todos</option>
-                <option value="PENDENTE_ASSINATURA">{statusLabel['PENDENTE_ASSINATURA']}</option>
-                <option value="CONCLUIDA">{statusLabel['CONCLUIDA']}</option>
-                <option value="CANCELADA">{statusLabel['CANCELADA']}</option>
-              </select>
-            </label>
-            <label className="block">
               <span className="block mb-1">De</span>
               <DateInput label="" value={filtroDe} onChange={setFiltroDe} />
             </label>
@@ -217,7 +196,7 @@ export default function TransacoesPage(){
               <DateInput label="" value={filtroAte} onChange={setFiltroAte} />
             </label>
             <div className="md:col-span-4 flex gap-2 justify-end">
-              <Button type="button" variant="secondary" onClick={()=>{ setFiltroAcolhidaId(null); setFiltroAcolhidaNome(''); setFiltroTipo(''); setFiltroForma(''); setFiltroStatus(''); setFiltroDe(null); setFiltroAte(null); load(); }}>Limpar</Button>
+              <Button type="button" variant="secondary" onClick={()=>{ setFiltroAcolhidaId(null); setFiltroAcolhidaNome(''); setFiltroTipo(''); setFiltroForma(''); setFiltroDe(null); setFiltroAte(null); load(); }}>Limpar</Button>
               <Button type="button" onClick={load}>Buscar</Button>
             </div>
           </div>
@@ -229,12 +208,11 @@ export default function TransacoesPage(){
           <thead className="bg-gray-100">
             <tr>
               <th className="text-left p-3">Tipo</th>
+              <th className="text-left p-3">Origem/Acolhida</th>
               <th className="text-left p-3">Valor</th>
               <th className="text-left p-3">Forma</th>
               <th className="text-left p-3">Recibo</th>
-                  <th className="text-left p-3">Status</th>
-                  <th className="text-left p-3">Assinado</th>
-                  <th className="text-left p-3">Data</th>
+              <th className="text-left p-3">Data</th>
               <th className="text-left p-3">Ações</th>
             </tr>
           </thead>
@@ -242,36 +220,21 @@ export default function TransacoesPage(){
             {lista.map(t=> (
               <tr key={t.id} className="border-t">
                 <td className="p-3">{tipoLabel[t.tipo]}</td>
+                <td className="p-3">{t.acolhidaNome || t.origemNome || '-'}</td>
                 <td className="p-3">R$ {t.valor.toFixed(2)}</td>
                 <td className="p-3">{formaLabel[t.formaPagamento]}</td>
                 <td className="p-3">{t.numeroRecibo}</td>
-                <td className="p-3">
-                  <span className={`inline-flex items-center gap-2 px-2 py-1 rounded-full text-sm ${t.status==='CONCLUIDA' ? 'bg-emerald-100 text-emerald-800' : t.status==='CANCELADA' ? 'bg-gray-200 text-gray-700' : 'bg-amber-100 text-amber-800'}`}>
-                    <span className={`h-2 w-2 rounded-full ${t.status==='CONCLUIDA' ? 'bg-emerald-500' : t.status==='CANCELADA' ? 'bg-gray-500' : 'bg-amber-500'}`}></span>
-                    {statusLabel[t.status]}
-                  </span>
-                </td>
-                <td className="p-3">
-                  {t.status === 'CONCLUIDA' ? (
-                    <span className="inline-flex items-center gap-2 px-2 py-1 rounded-full text-sm bg-emerald-100 text-emerald-800">Assinado</span>
-                  ) : (
-                    <span className="inline-flex items-center gap-2 px-2 py-1 rounded-full text-sm bg-amber-100 text-amber-800">Pendente</span>
-                  )}
-                </td>
                 <td className="p-3">{new Date(t.dataHora).toLocaleString()}</td>
                 <td className="p-3">
                   <div className="flex flex-wrap gap-2">
-                    <Button onClick={()=>baixarRecibo(t.id)} size="sm">PDF</Button>
-                    {t.status === 'PENDENTE_ASSINATURA' && (
-                      <Button onClick={()=>cancelar(t.id)} variant="danger" size="sm">Cancelar</Button>
-                    )}
+                    <Button onClick={()=>baixarRecibo(t.id)} size="sm">Gerar Recibo PDF</Button>
                     <Button onClick={()=>excluir(t.id)} variant="danger" size="sm">Excluir</Button>
                   </div>
                 </td>
               </tr>
             ))}
             {(!loading && lista.length===0) && (
-              <tr><td className="p-4" colSpan={7}>Nenhum registro</td></tr>
+              <tr><td className="p-4" colSpan={6}>Nenhum registro</td></tr>
             )}
           </tbody>
         </table>
@@ -288,7 +251,7 @@ export default function TransacoesPage(){
                 <option value="RECEBIMENTO_ACOLHIDA">{tipoLabel['RECEBIMENTO_ACOLHIDA']}</option>
               </select>
             </label>
-            <Input label="Valor (R$)" value={form.valor} onChange={e=> setForm({...form, valor: e.target.value})} placeholder="100,00" inputMode="decimal" />
+            <Input label="Valor (R$)" value={formatCurrencyFromDigits(form.valor)} onChange={e=> setForm({...form, valor: e.target.value.replace(/\D/g,'')})} placeholder="0,00" inputMode="numeric" />
             <label className="block">
               <span className="block mb-1">Forma de pagamento</span>
               <select className="w-full border rounded-lg p-3 text-lg" value={form.formaPagamento} onChange={e=> setForm({...form, formaPagamento: e.target.value as any })}>
@@ -414,6 +377,39 @@ function buildLocalDateTime(dateStr: string, timeStr: string): Date {
   const [year, month, day] = dateStr.split('-').map(n=>parseInt(n,10))
   const [hour, minute] = timeStr.split(':').map(n=>parseInt(n,10))
   return new Date(year, (month-1), day, hour, minute, 0, 0)
+}
+
+function toLocalOffsetIso(d: Date): string {
+  const tzOffsetMin = d.getTimezoneOffset()
+  const sign = tzOffsetMin > 0 ? '-' : '+'
+  const abs = Math.abs(tzOffsetMin)
+  const hh = String(Math.floor(abs / 60)).padStart(2,'0')
+  const mm = String(abs % 60).padStart(2,'0')
+  const yyyy = d.getFullYear()
+  const MM = String(d.getMonth()+1).padStart(2,'0')
+  const DD = String(d.getDate()).padStart(2,'0')
+  const HH = String(d.getHours()).padStart(2,'0')
+  const mi = String(d.getMinutes()).padStart(2,'0')
+  const ss = String(d.getSeconds()).padStart(2,'0')
+  return `${yyyy}-${MM}-${DD}T${HH}:${mi}:${ss}${sign}${hh}:${mm}`
+}
+
+function formatCurrencyFromDigits(digits: string): string {
+  const only = (digits || '').replace(/\D/g,'')
+  if (only === '') return ''
+  const cents = only.padStart(3,'0')
+  const intPart = cents.slice(0, -2)
+  const frac = cents.slice(-2)
+  const withThousands = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+  return `${withThousands},${frac}`
+}
+
+function parseCurrencyFromDigits(digits: string): number {
+  const only = (digits || '').replace(/\D/g,'')
+  if (only === '') return NaN
+  const num = parseInt(only, 10)
+  if (!isFinite(num)) return NaN
+  return num / 100
 }
 
 

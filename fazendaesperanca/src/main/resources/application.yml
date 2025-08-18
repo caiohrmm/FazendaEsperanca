@@ -7,7 +7,7 @@ spring:
   datasource:
     url: jdbc:mysql://localhost:3306/fazendaesperanca?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&characterEncoding=utf8
     username: root
-    password: caio123
+    password: joj123
   jpa:
     hibernate:
       ddl-auto: validate

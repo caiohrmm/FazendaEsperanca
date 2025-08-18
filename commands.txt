@@ -1,2 +1,2 @@
-.\mvnw spring-boot:run
-.\mvnw -DskipTests package
+.\mvnw.cmd spring-boot:run
+.\mvnw.cmd -DskipTests package

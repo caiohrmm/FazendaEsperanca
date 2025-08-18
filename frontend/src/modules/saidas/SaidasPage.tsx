@@ -128,7 +128,7 @@ function SaidasPage(){
   }
   const save = async()=>{
     if (!validate()) return
-    const dataHoraSaida = buildLocalDateTime(form.data!, form.hora).toISOString()
+    const dataHoraSaida = toLocalOffsetIso(buildLocalDateTime(form.data!, form.hora))
     loadingBus.start()
     try{
       if (editing) {
@@ -137,13 +137,13 @@ function SaidasPage(){
         await axios.put(`/saidas-medicas/${editing.id}`, updateReq)
         // Registra retorno se informado e ainda não existe
         if (form.retornoData && form.retornoHora && !editing.dataHoraRetorno) {
-          const dataHoraRetorno = buildLocalDateTime(form.retornoData, form.retornoHora).toISOString()
+          const dataHoraRetorno = toLocalOffsetIso(buildLocalDateTime(form.retornoData, form.retornoHora))
           await axios.put(`/saidas-medicas/${editing.id}/retorno`, { dataHoraRetorno })
         }
       } else {
         const payload:any = { acolhidaId: form.acolhidaId, motivo: form.motivo, destino: form.destino, profissional: form.profissional || null, dataHoraSaida, meioTransporte: form.meioTransporte || null, observacoes: form.observacoes || null, responsavel: form.responsavel }
         if (form.retornoData && form.retornoHora) {
-          payload.dataHoraRetorno = buildLocalDateTime(form.retornoData, form.retornoHora).toISOString()
+          payload.dataHoraRetorno = toLocalOffsetIso(buildLocalDateTime(form.retornoData, form.retornoHora))
         }
         await axios.post('/saidas-medicas', payload)
       }
@@ -190,7 +190,7 @@ function SaidasPage(){
 
   const saveGroup = async()=>{
     if (!validateGroup()) return
-    const dataHoraSaida = buildLocalDateTime(groupForm.data!, groupForm.hora).toISOString()
+    const dataHoraSaida = toLocalOffsetIso(buildLocalDateTime(groupForm.data!, groupForm.hora))
     
     loadingBus.start()
     try{
@@ -207,7 +207,7 @@ function SaidasPage(){
           responsavel: groupForm.responsavel 
         }
         if (groupForm.retornoData && groupForm.retornoHora) {
-          payload.dataHoraRetorno = buildLocalDateTime(groupForm.retornoData, groupForm.retornoHora).toISOString()
+          payload.dataHoraRetorno = toLocalOffsetIso(buildLocalDateTime(groupForm.retornoData, groupForm.retornoHora))
         }
         return axios.post('/saidas-medicas', payload)
       })
@@ -670,6 +670,22 @@ function buildLocalDateTime(dateStr: string, timeStr: string): Date {
   const [year, month, day] = dateStr.split('-').map(n=>parseInt(n,10))
   const [hour, minute] = timeStr.split(':').map(n=>parseInt(n,10))
   return new Date(year, (month-1), day, hour, minute, 0, 0)
+}
+
+// Converte Date local para ISO com offset local (ex.: 2025-08-18T10:30:00-03:00)
+function toLocalOffsetIso(d: Date): string {
+  const tzOffsetMin = d.getTimezoneOffset()
+  const sign = tzOffsetMin > 0 ? '-' : '+'
+  const abs = Math.abs(tzOffsetMin)
+  const hh = String(Math.floor(abs / 60)).padStart(2,'0')
+  const mm = String(abs % 60).padStart(2,'0')
+  const yyyy = d.getFullYear()
+  const MM = String(d.getMonth()+1).padStart(2,'0')
+  const DD = String(d.getDate()).padStart(2,'0')
+  const HH = String(d.getHours()).padStart(2,'0')
+  const mi = String(d.getMinutes()).padStart(2,'0')
+  const ss = String(d.getSeconds()).padStart(2,'0')
+  return `${yyyy}-${MM}-${DD}T${HH}:${mi}:${ss}${sign}${hh}:${mm}`
 }
 
 function formatDateTimeBR(iso: string): string {

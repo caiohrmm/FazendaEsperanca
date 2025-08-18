@@ -11,7 +11,7 @@ type AuthContextType = {
 const AuthContext = createContext<AuthContextType>({} as any)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem('accessToken'))
+  const [token, setToken] = useState<string | null>(null)
   const idleTimeoutMinutes = Number((import.meta as any).env?.VITE_IDLE_TIMEOUT_MINUTES ?? 30)
   const idleTimeoutMs = isFinite(idleTimeoutMinutes) && idleTimeoutMinutes > 0 ? idleTimeoutMinutes * 60 * 1000 : 30 * 60 * 1000
 
@@ -45,6 +45,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       (res) => { active--; if (active === 0) loadingBus.end(); return res },
       async (error) => {
         active--; if (active === 0) loadingBus.end()
+        // Ignorar requisições canceladas (ex.: múltiplos cliques em exportar)
+        if ((error && (error.code === 'ERR_CANCELED' || error.message === 'canceled'))){
+          return Promise.reject(error)
+        }
         const original = error.config || {}
         const status = error?.response?.status
         const isAuthEndpoint = original?.url?.includes('/auth/')
@@ -83,12 +87,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             isRefreshing = false
           }
         }
-        // API offline ou erro de servidor: desloga e volta para login
-        const networkDown = !error?.response
-        const serverDown = typeof status === 'number' && status >= 500
-        if (!isAuthEndpoint && (networkDown || serverDown)) {
+        // 403 (forbidden) também deve deslogar e enviar ao login
+        if (status === 403 && !isAuthEndpoint) {
           logout()
+          return Promise.reject(error)
         }
+        // Para erros de rede/servidor, manter sessão e apenas propagar erro
         return Promise.reject(error)
       }
     )
@@ -113,6 +117,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem('refreshToken')
     localStorage.removeItem('lastActivityAt')
   }
+
+  // Sempre iniciar sessão deslogada ao abrir/atualizar a aplicação
+  useEffect(() => {
+    logout()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Idle logout + cross-tab sync
   useEffect(() => {
