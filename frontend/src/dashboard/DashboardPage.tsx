@@ -27,11 +27,36 @@ export default function DashboardPage(){
         const totalAcolhidas = page1.data.totalElements ?? 0
         const totalAcolhidasAtivas = page2.data.totalElements ?? 0
         const totalAcolhidasEgressas = totalAcolhidas - totalAcolhidasAtivas
-        setStats({ totalSaidas: 0, tempoMedioForaMin: 0, totalTransacoes: 0, totalAcolhidas, totalAcolhidasAtivas, totalAcolhidasEgressas })
+
+        // estatísticas de saídas
+        const saidasRes = await axios.get('/saidas-medicas', { params: { page:0, size:1 }})
+        const totalSaidas = saidasRes.data.totalElements ?? 0
+        // tempo médio fora (aproximação pela primeira página)
+        const saidasRes2 = await axios.get('/saidas-medicas', { params: { page:0, size:50 }})
+        const listSaidas = Array.isArray(saidasRes2.data?.content) ? saidasRes2.data.content : []
+        const medias = listSaidas.map((s:any)=> typeof s.duracaoMinutos==='number'? s.duracaoMinutos : null).filter((x:any)=> typeof x==='number')
+        const tempoMedioForaMin = medias.length>0 ? Math.round(medias.reduce((a:number,b:number)=>a+b,0)/medias.length) : 0
+
+        // estatísticas de transações
+        const transRes = await axios.get('/transacoes', { params: { page:0, size:1 }})
+        const totalTransacoes = transRes.data.totalElements ?? 0
+
+        setStats({ totalSaidas, tempoMedioForaMin, totalTransacoes, totalAcolhidas, totalAcolhidasAtivas, totalAcolhidasEgressas })
       } catch(e:any){ setError('Falha ao carregar estatísticas') }
       finally{ setLoading(false) }
     })()
   },[])
+
+  const baixarRelatorioFinanceiro = async()=>{
+    const ate = new Date()
+    const de = new Date(); de.setMonth(de.getMonth()-1)
+    const toIso = (d:Date)=> new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString()
+    const res = await axios.get(`/relatorios/financeiro.csv`, { params:{ de: toIso(de), ate: toIso(ate) }, responseType:'blob' })
+    const blob = new Blob([res.data], { type:'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a'); a.href = url; a.download = `relatorio-financeiro.csv`; a.click()
+    URL.revokeObjectURL(url)
+  }
 
   return (
     <div className="space-y-6 relative overflow-hidden">
@@ -55,6 +80,19 @@ export default function DashboardPage(){
             <Card title="Acolhidas" value={stats.totalAcolhidas} />
             <Card title="Ativas" value={stats.totalAcolhidasAtivas} />
             <Card title="Egressas" value={stats.totalAcolhidasEgressas} />
+          </div>
+
+          <div className="bg-white/90 backdrop-blur p-6 rounded-xl shadow border">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold">Atalhos</h2>
+              <div className="flex gap-2">
+                <Button onClick={()=>window.location.assign('/transacoes')}>Ir para Financeiro</Button>
+                <Button onClick={()=>window.location.assign('/saidas-medicas')} variant="secondary">Ir para Saídas</Button>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={baixarRelatorioFinanceiro} variant="secondary">Baixar Relatório Financeiro (30 dias)</Button>
+            </div>
           </div>
         </>
       )}

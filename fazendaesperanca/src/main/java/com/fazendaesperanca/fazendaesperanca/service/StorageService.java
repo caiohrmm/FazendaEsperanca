@@ -23,11 +23,13 @@ public class StorageService {
     private String anexosDir;
 
     public Path saveAssinatura(Long transacaoId, MultipartFile file) throws IOException {
-        return save(file, Paths.get(basePath, assinaturasDir, String.valueOf(transacaoId)));
+        Path dir = resolveBaseDir().resolve(assinaturasDir).resolve(String.valueOf(transacaoId));
+        return save(file, dir);
     }
 
     public Path saveAnexo(Long transacaoId, MultipartFile file) throws IOException {
-        return save(file, Paths.get(basePath, anexosDir, String.valueOf(transacaoId)));
+        Path dir = resolveBaseDir().resolve(anexosDir).resolve(String.valueOf(transacaoId));
+        return save(file, dir);
     }
 
     public byte[] loadAsBytes(Path path) throws IOException {
@@ -36,10 +38,25 @@ public class StorageService {
 
     private Path save(MultipartFile file, Path dir) throws IOException {
         Files.createDirectories(dir);
-        String safeName = UUID.randomUUID() + "-" + file.getOriginalFilename();
-        Path dest = dir.resolve(safeName);
+        String original = file.getOriginalFilename();
+        if (original == null || original.isBlank()) original = "upload.bin";
+        String safeName = UUID.randomUUID() + "-" + original.replace('\\', '_').replace('/', '_');
+        Path dest = dir.resolve(safeName).normalize();
         file.transferTo(dest.toFile());
         return dest;
+    }
+
+    private Path resolveBaseDir() {
+        Path p = Paths.get(basePath);
+        if (!p.isAbsolute()) {
+            String userDir = System.getProperty("user.dir");
+            if (userDir != null && !userDir.isBlank()) {
+                p = Paths.get(userDir).resolve(p).normalize();
+            } else {
+                p = p.toAbsolutePath().normalize();
+            }
+        }
+        return p;
     }
 }
 

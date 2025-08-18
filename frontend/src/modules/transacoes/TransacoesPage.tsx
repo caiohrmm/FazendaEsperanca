@@ -9,12 +9,30 @@ import { loadingBus } from '../../system/loadingBus'
 
 type Transacao = {
   id: number
-  tipo: 'DOACAO_EXTERNA'|'RECEBIMENTO_ACOLHIDA'|'ENTREGA_ACOLHIDA'
+  tipo: 'DOACAO_EXTERNA'|'RECEBIMENTO_ACOLHIDA'
   valor: number
   formaPagamento: 'PIX'|'DINHEIRO'|'DEPOSITO'|'CARTAO'|'TRANSFERENCIA'
   numeroRecibo: string
   status: 'PENDENTE_ASSINATURA'|'CONCLUIDA'|'CANCELADA'
   dataHora: string
+  arquivoAssinadoPath?: string | null
+}
+
+const tipoLabel: Record<Transacao['tipo'], string> = {
+  DOACAO_EXTERNA: 'Doação Externa',
+  RECEBIMENTO_ACOLHIDA: 'Recebimento de Acolhida'
+}
+const formaLabel: Record<Transacao['formaPagamento'], string> = {
+  PIX: 'Pix',
+  DINHEIRO: 'Dinheiro',
+  DEPOSITO: 'Depósito',
+  CARTAO: 'Cartão',
+  TRANSFERENCIA: 'Transferência'
+}
+const statusLabel: Record<Transacao['status'], string> = {
+  PENDENTE_ASSINATURA: 'Pendente de Assinatura',
+  CONCLUIDA: 'Concluída',
+  CANCELADA: 'Cancelada'
 }
 
 export default function TransacoesPage(){
@@ -39,15 +57,13 @@ export default function TransacoesPage(){
 
   // Modal criação
   const [openCreate, setOpenCreate] = useState(false)
-  const [form, setForm] = useState({ tipo: 'DOACAO_EXTERNA' as Transacao['tipo'], origemNome: '', origemDocumento: '', acolhidaId: 0, valor: '', data: null as string | null, hora: '', formaPagamento: 'PIX' as Transacao['formaPagamento'], descricao: '' })
+  const [form, setForm] = useState({ tipo: 'DOACAO_EXTERNA' as Transacao['tipo'], origemNome: '', origemDocumento: '', acolhidaId: 0, acolhidaNome: '', valor: '', data: null as string | null, hora: '', formaPagamento: 'PIX' as Transacao['formaPagamento'], descricao: '' })
   const [formAcolhidaPickerOpen, setFormAcolhidaPickerOpen] = useState(false)
   const [formPickerNome, setFormPickerNome] = useState('')
   const [formPickerLoading, setFormPickerLoading] = useState(false)
   const [formPickerData, setFormPickerData] = useState<Array<{id:number; nomeCompleto:string; status:string}>>([])
 
-  // Modal upload assinado
-  const [openUpload, setOpenUpload] = useState<{open:boolean; id:number|null}>({ open:false, id:null })
-  const [uploadFile, setUploadFile] = useState<File | null>(null)
+  // Removido fluxo de upload assinado (não é mais necessário)
 
   const load = async()=>{
     setLoading(true); loadingBus.start()
@@ -115,16 +131,13 @@ export default function TransacoesPage(){
     finally { loadingBus.end() }
   }
 
-  const uploadAssinado = async()=>{
-    if (!openUpload.id) return
-    if (!uploadFile) { toast.error('Selecione um arquivo'); return }
-    const fd = new FormData()
-    fd.append('file', uploadFile)
+  // uploadAssinado removido
+
+  const excluir = async(id:number)=>{
+    if (!confirm('Excluir esta transação? Esta ação não pode ser desfeita.')) return
     loadingBus.start()
-    try{
-      await axios.post(`/transacoes/${openUpload.id}/recibo-assinado`, fd, { headers: { 'Content-Type': 'multipart/form-data' }})
-      setOpenUpload({ open:false, id:null }); setUploadFile(null); toast.success('Recibo enviado'); await load()
-    } catch(e:any){ toast.error(e?.response?.data?.message ?? 'Erro ao enviar recibo') }
+    try{ await axios.delete(`/transacoes/${id}`); toast.success('Transação excluída'); await load() }
+    catch(e:any){ toast.error(e?.response?.data?.message ?? 'Falha ao excluir') }
     finally { loadingBus.end() }
   }
 
@@ -171,29 +184,28 @@ export default function TransacoesPage(){
               <span className="block mb-1">Tipo</span>
               <select className="w-full border rounded-lg p-3 text-lg" value={filtroTipo} onChange={e=> setFiltroTipo(e.target.value as any)}>
                 <option value="">Todos</option>
-                <option value="DOACAO_EXTERNA">DOACAO_EXTERNA</option>
-                <option value="RECEBIMENTO_ACOLHIDA">RECEBIMENTO_ACOLHIDA</option>
-                <option value="ENTREGA_ACOLHIDA">ENTREGA_ACOLHIDA</option>
+                <option value="DOACAO_EXTERNA">{tipoLabel['DOACAO_EXTERNA']}</option>
+                <option value="RECEBIMENTO_ACOLHIDA">{tipoLabel['RECEBIMENTO_ACOLHIDA']}</option>
               </select>
             </label>
             <label className="block">
               <span className="block mb-1">Forma</span>
               <select className="w-full border rounded-lg p-3 text-lg" value={filtroForma} onChange={e=> setFiltroForma(e.target.value as any)}>
                 <option value="">Todas</option>
-                <option value="PIX">PIX</option>
-                <option value="DINHEIRO">DINHEIRO</option>
-                <option value="DEPOSITO">DEPOSITO</option>
-                <option value="CARTAO">CARTAO</option>
-                <option value="TRANSFERENCIA">TRANSFERENCIA</option>
+                <option value="PIX">{formaLabel['PIX']}</option>
+                <option value="DINHEIRO">{formaLabel['DINHEIRO']}</option>
+                <option value="DEPOSITO">{formaLabel['DEPOSITO']}</option>
+                <option value="CARTAO">{formaLabel['CARTAO']}</option>
+                <option value="TRANSFERENCIA">{formaLabel['TRANSFERENCIA']}</option>
               </select>
             </label>
             <label className="block">
               <span className="block mb-1">Status</span>
               <select className="w-full border rounded-lg p-3 text-lg" value={filtroStatus} onChange={e=> setFiltroStatus(e.target.value as any)}>
                 <option value="">Todos</option>
-                <option value="PENDENTE_ASSINATURA">PENDENTE_ASSINATURA</option>
-                <option value="CONCLUIDA">CONCLUIDA</option>
-                <option value="CANCELADA">CANCELADA</option>
+                <option value="PENDENTE_ASSINATURA">{statusLabel['PENDENTE_ASSINATURA']}</option>
+                <option value="CONCLUIDA">{statusLabel['CONCLUIDA']}</option>
+                <option value="CANCELADA">{statusLabel['CANCELADA']}</option>
               </select>
             </label>
             <label className="block">
@@ -220,29 +232,40 @@ export default function TransacoesPage(){
               <th className="text-left p-3">Valor</th>
               <th className="text-left p-3">Forma</th>
               <th className="text-left p-3">Recibo</th>
-              <th className="text-left p-3">Status</th>
-              <th className="text-left p-3">Data</th>
+                  <th className="text-left p-3">Status</th>
+                  <th className="text-left p-3">Assinado</th>
+                  <th className="text-left p-3">Data</th>
               <th className="text-left p-3">Ações</th>
             </tr>
           </thead>
           <tbody>
             {lista.map(t=> (
               <tr key={t.id} className="border-t">
-                <td className="p-3">{t.tipo}</td>
+                <td className="p-3">{tipoLabel[t.tipo]}</td>
                 <td className="p-3">R$ {t.valor.toFixed(2)}</td>
-                <td className="p-3">{t.formaPagamento}</td>
+                <td className="p-3">{formaLabel[t.formaPagamento]}</td>
                 <td className="p-3">{t.numeroRecibo}</td>
-                <td className="p-3">{t.status}</td>
+                <td className="p-3">
+                  <span className={`inline-flex items-center gap-2 px-2 py-1 rounded-full text-sm ${t.status==='CONCLUIDA' ? 'bg-emerald-100 text-emerald-800' : t.status==='CANCELADA' ? 'bg-gray-200 text-gray-700' : 'bg-amber-100 text-amber-800'}`}>
+                    <span className={`h-2 w-2 rounded-full ${t.status==='CONCLUIDA' ? 'bg-emerald-500' : t.status==='CANCELADA' ? 'bg-gray-500' : 'bg-amber-500'}`}></span>
+                    {statusLabel[t.status]}
+                  </span>
+                </td>
+                <td className="p-3">
+                  {t.status === 'CONCLUIDA' ? (
+                    <span className="inline-flex items-center gap-2 px-2 py-1 rounded-full text-sm bg-emerald-100 text-emerald-800">Assinado</span>
+                  ) : (
+                    <span className="inline-flex items-center gap-2 px-2 py-1 rounded-full text-sm bg-amber-100 text-amber-800">Pendente</span>
+                  )}
+                </td>
                 <td className="p-3">{new Date(t.dataHora).toLocaleString()}</td>
                 <td className="p-3">
                   <div className="flex flex-wrap gap-2">
                     <Button onClick={()=>baixarRecibo(t.id)} size="sm">PDF</Button>
                     {t.status === 'PENDENTE_ASSINATURA' && (
-                      <>
-                        <Button onClick={()=>setOpenUpload({ open:true, id:t.id })} size="sm">Assinado</Button>
-                        <Button onClick={()=>cancelar(t.id)} variant="danger" size="sm">Cancelar</Button>
-                      </>
+                      <Button onClick={()=>cancelar(t.id)} variant="danger" size="sm">Cancelar</Button>
                     )}
+                    <Button onClick={()=>excluir(t.id)} variant="danger" size="sm">Excluir</Button>
                   </div>
                 </td>
               </tr>
@@ -261,20 +284,19 @@ export default function TransacoesPage(){
             <label className="block">
               <span className="block mb-1">Tipo</span>
               <select className="w-full border rounded-lg p-3 text-lg" value={form.tipo} onChange={e=> setForm({...form, tipo: e.target.value as any })}>
-                <option value="DOACAO_EXTERNA">DOACAO_EXTERNA</option>
-                <option value="RECEBIMENTO_ACOLHIDA">RECEBIMENTO_ACOLHIDA</option>
-                <option value="ENTREGA_ACOLHIDA">ENTREGA_ACOLHIDA</option>
+                <option value="DOACAO_EXTERNA">{tipoLabel['DOACAO_EXTERNA']}</option>
+                <option value="RECEBIMENTO_ACOLHIDA">{tipoLabel['RECEBIMENTO_ACOLHIDA']}</option>
               </select>
             </label>
             <Input label="Valor (R$)" value={form.valor} onChange={e=> setForm({...form, valor: e.target.value})} placeholder="100,00" inputMode="decimal" />
             <label className="block">
               <span className="block mb-1">Forma de pagamento</span>
               <select className="w-full border rounded-lg p-3 text-lg" value={form.formaPagamento} onChange={e=> setForm({...form, formaPagamento: e.target.value as any })}>
-                <option value="PIX">PIX</option>
-                <option value="DINHEIRO">DINHEIRO</option>
-                <option value="DEPOSITO">DEPOSITO</option>
-                <option value="CARTAO">CARTAO</option>
-                <option value="TRANSFERENCIA">TRANSFERENCIA</option>
+                <option value="PIX">{formaLabel['PIX']}</option>
+                <option value="DINHEIRO">{formaLabel['DINHEIRO']}</option>
+                <option value="DEPOSITO">{formaLabel['DEPOSITO']}</option>
+                <option value="CARTAO">{formaLabel['CARTAO']}</option>
+                <option value="TRANSFERENCIA">{formaLabel['TRANSFERENCIA']}</option>
               </select>
             </label>
             <Input label="Descrição (opcional)" value={form.descricao} onChange={e=> setForm({...form, descricao: e.target.value})} />
@@ -289,7 +311,7 @@ export default function TransacoesPage(){
                 <label className="block md:col-span-2">
                   <span className="block mb-1">Acolhida</span>
                   <div className="flex gap-2">
-                    <input className="flex-1 border rounded-lg p-3 text-lg bg-gray-50" value={form.acolhidaId>0?`ID ${form.acolhidaId}`:''} readOnly placeholder="Selecione a acolhida" />
+                    <input className="flex-1 border rounded-lg p-3 text-lg bg-gray-50" value={form.acolhidaNome || ''} readOnly placeholder="Selecione a acolhida" />
                     <Button onClick={()=>{ setFormAcolhidaPickerOpen(true); loadFormPicker(); }} type="button">Selecionar</Button>
                   </div>
                 </label>
@@ -365,7 +387,7 @@ export default function TransacoesPage(){
                   <tr key={a.id} className="border-t">
                     <td className="p-3">{a.nomeCompleto}</td>
                     <td className="p-3">{a.status}</td>
-                    <td className="p-3 text-right"><Button type="button" onClick={()=>{ setForm({...form, acolhidaId:a.id}); setFormAcolhidaPickerOpen(false); }}>Selecionar</Button></td>
+                     <td className="p-3 text-right"><Button type="button" onClick={()=>{ setForm({...form, acolhidaId:a.id, acolhidaNome: a.nomeCompleto}); setFormAcolhidaPickerOpen(false); }}>Selecionar</Button></td>
                   </tr>
                 ))}
               </tbody>
@@ -374,16 +396,7 @@ export default function TransacoesPage(){
         </div>
       </Modal>
 
-      {/* Upload Assinado */}
-      <Modal open={openUpload.open} onClose={()=>{ setOpenUpload({open:false, id:null}); setUploadFile(null) }} title="Enviar Recibo Assinado">
-        <div className="space-y-4">
-          <input type="file" accept="application/pdf,image/*" onChange={e=> setUploadFile(e.target.files?.[0] || null)} />
-        </div>
-        <div className="mt-6 flex justify-end gap-3">
-          <Button variant="secondary" onClick={()=>{ setOpenUpload({open:false, id:null}); setUploadFile(null) }}>Cancelar</Button>
-          <Button onClick={uploadAssinado}>Enviar</Button>
-        </div>
-      </Modal>
+      {/* Fluxo de upload removido */}
     </div>
   )
 }
